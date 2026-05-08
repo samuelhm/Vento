@@ -1,0 +1,75 @@
+# ----------------------------------------------------------------------
+# Vento Project - Root Gitignore
+# ----------------------------------------------------------------------
+
+# --- Dependencies ---
+# Ignore node_modules in root and all subdirectories
+node_modules/
+**/node_modules/
+
+# --- Build Outputs (Node.js/Web) ---
+dist/
+build/
+out/
+.next/
+.nuxt/
+.vuepress/dist
+coverage/
+.husky/
+.husky
+
+# --- Build Outputs (Rust) ---
+# If you integrate the Rust linter we discussed
+/target/
+**/*.rs.bk
+
+# --- Environment Variables & Secrets (CRITICAL) ---
+# Never commit keys, passwords, or local configs
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Exception: Commit the example template
+!.env.example
+
+# --- Logs ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# --- System Files ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- IDE & Editor Config ---
+.idea/
+*.swp
+*.swo
+
+# VS Code - Vento Specific
+# We ignore the .vscode folder generally...
+.vscode/*
+# ...BUT we force-include the team settings for ESLint/Style
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+# Ignore local history plugin if used
+.history/
+
+# --- Testing & Temporary ---
+.test/
+temp/
+tmp/
+test.http
+testListings.http
+
+# --- Vento Specific ---
+# If you use the WIP commit convention, you might want to ignore 
+# specific dump files, but usually WIP is handled via git branches.
+secrets/
+.env

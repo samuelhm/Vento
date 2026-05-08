@@ -1,0 +1,1 @@
+export { CompactReviewItem } from './CompactReviewItem';

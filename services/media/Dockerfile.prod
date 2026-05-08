@@ -1,0 +1,22 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache wget
+
+WORKDIR /app
+
+RUN mkdir -p /uploads && chown -R node:node /uploads
+
+COPY src/package*.json ./
+RUN npm ci --production
+
+COPY src/ .
+COPY assets/ ./assets/
+COPY docker-entrypoint.prod.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.prod.sh
+
+EXPOSE 3003
+
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget -qO /dev/null http://127.0.0.1:3003/health || exit 1
+
+ENTRYPOINT ["docker-entrypoint.prod.sh"]

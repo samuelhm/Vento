@@ -1,0 +1,239 @@
+services:
+  gateway:
+    image: nginx:alpine
+    container_name: tr_gateway
+    ports:
+      - "8443:443"
+    volumes:
+      - ./infra/nginx/conf.d:/etc/nginx/conf.d
+      - ./infra/nginx/certs:/etc/nginx/certs
+    depends_on:
+      frontend:
+        condition: service_healthy
+      bff:
+        condition: service_healthy
+      chat:
+        condition: service_healthy
+    networks:
+      - trans_net
+
+# Unified Database (Contains 3 logical databases)
+  postgres:
+    image: postgis/postgis:15-3.5-alpine
+    platform: linux/amd64
+    container_name: tr_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      AUTH_DB_USER: ${AUTH_DB_USER}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      AUTH_DB_NAME: ${AUTH_DB_NAME}
+      CHAT_DB_USER: ${CHAT_DB_USER}
+      CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD}
+      CHAT_DB_NAME: ${CHAT_DB_NAME}
+      CATALOG_DB_USER: ${CATALOG_DB_USER}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME}
+# This script will create the 3 databases on startup so that it doesn't overload the RAM.
+    volumes:
+      - ./infra/postgres/init_dbs.sh:/docker-entrypoint-initdb.d/init_dbs.sh
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - trans_net
+# TMP : port exposed temporally for testing purpose
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 30s
+      retries: 10
+
+  #State chats and management
+  valkey:
+    image: valkey/valkey:8.0-alpine
+    container_name: tr_valkey
+    networks:
+      - trans_net
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 30s
+      retries: 10
+  # --- Services ---
+
+  # Frontend (React)
+  frontend:
+    build: ./services/frontend
+    container_name: tr_frontend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5173/"]
+      interval: 30s
+      timeout: 2s
+      retries: 10
+      start_period: 15s
+    environment:
+      AUTH_URL: http://auth:${AUTH_PORT}
+      CATALOG_URL: http://catalog:${CATALOG_PORT}
+      MEDIA_URL: http://media:${MEDIA_PORT}
+    networks:
+      - trans_net
+    depends_on:
+      bff:
+        condition: service_healthy
+      chat:
+        condition: service_healthy
+    volumes:
+      - ./services/frontend:/app
+      - ./secrets:/run/secrets:ro
+      - /app/node_modules
+
+  # BFF (Backend For Frontend) - The logic orchestrator
+  bff:
+    build: ./services/bff
+    container_name: tr_bff
+    environment:
+      PORT: ${BFF_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      SERVICE_NAME: "BFF Service"
+      AUTH_URL: http://auth:${AUTH_PORT}
+      CATALOG_URL: http://catalog:${CATALOG_PORT}
+      MEDIA_URL: http://media:${MEDIA_PORT}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      auth:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+      media:
+        condition: service_healthy
+    networks:
+      - trans_net
+    volumes:
+      - ./services/bff/src:/app
+      - /app/node_modules
+
+  # Microservice 1: Auth
+  auth:
+    build: ./services/auth
+    container_name: tr_auth
+    environment:
+      PORT: ${AUTH_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_NAME: "Auth Service"
+      DATABASE_URL: postgres://${AUTH_DB_USER}:${AUTH_DB_PASSWORD}@postgres:5432/${AUTH_DB_NAME}
+      SERVICE_SECRET: ${SERVICE_SECRET}
+      MEDIA_URL: http://media:${MEDIA_PORT}
+      DB_MAX_RETRIES: ${DB_MAX_RETRIES}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_FROM: ${SMTP_FROM}
+      FRONTEND_URL: ${FRONTEND_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3001/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./services/auth/src:/app
+      - ./secrets:/run/secrets:ro
+      - /app/node_modules
+    networks:
+      - trans_net
+
+  # Microservice 2: Catalog (Products + PostGIS for geolocation)
+  catalog:
+    build: ./services/catalog
+    container_name: tr_catalog
+    environment:
+      PORT: ${CATALOG_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      SERVICE_NAME: "Catalog Service"
+      DATABASE_URL: postgres://${CATALOG_DB_USER}:${CATALOG_DB_PASSWORD}@postgres:5432/${CATALOG_DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_SECRET: ${SERVICE_SECRET}
+      DB_MAX_RETRIES: ${DB_MAX_RETRIES}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3002/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - ./services/catalog/src:/app
+      - /app/node_modules
+    networks:
+      - trans_net
+
+  # Microservice 3: Media (File Management)
+  media:
+    build: ./services/media
+    container_name: tr_media
+    environment:
+      PORT: ${MEDIA_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      SERVICE_NAME: "Media Service"
+      UPLOAD_DIR: /uploads
+      SERVICE_SECRET: ${SERVICE_SECRET}
+      AUTH_URL: http://auth:${AUTH_PORT}
+      CATALOG_URL: http://catalog:${CATALOG_PORT}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3003/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - media_hdd:/uploads # File persistence (Your "HDD")
+      - ./services/media/src:/app
+      - ./services/media/assets:/app/assets:ro
+      - /app/node_modules
+    networks:
+      - trans_net
+
+  # Microservice 4: Chat (WebSockets)
+  chat:
+    build: ./services/chat
+    container_name: tr_chat
+    ports:
+      - "3004:3004"
+    environment:
+      PORT: ${CHAT_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      SERVICE_NAME: "Chat Service"
+      DATABASE_URL: postgres://${CHAT_DB_USER}:${CHAT_DB_PASSWORD}@postgres:5432/${CHAT_DB_NAME}
+      DB_MAX_RETRIES: ${DB_MAX_RETRIES}
+      JWT_SECRET: ${JWT_SECRET}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3004/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    volumes:
+      - ./services/chat:/app
+      - /app/node_modules
+    networks:
+      - trans_net
+
+volumes:
+  db_data:
+  media_hdd:
+
+networks:
+  trans_net:
+    driver: bridge

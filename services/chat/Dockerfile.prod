@@ -1,0 +1,22 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache openssl wget
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY prisma ./prisma/
+
+RUN npm ci && npx prisma generate
+
+COPY src/ ./src/
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
+
+EXPOSE 3004
+
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget -qO /dev/null http://127.0.0.1:3004/health || exit 1
+
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["node", "src/index.js"]

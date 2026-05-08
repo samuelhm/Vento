@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía de Verificación de Auth - Servicio Catalog</title>
+    <style>
+        :root {
+            --primary: #0f172a;
+            --accent: #3b82f6;
+            --code-bg: #1e293b;
+            --text: #334155;
+            --bg: #f1f5f9;
+        }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        h1 { color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+        h2 { color: var(--primary); margin-top: 30px; }
+        .step { background: #eff6ff; border-left: 4px solid var(--accent); padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+        code { background: #e2e8f0; padding: 2px 5px; border-radius: 4px; font-family: 'Fira Code', monospace; font-size: 0.9em; }
+        pre { background: var(--code-bg); color: #f8fafc; padding: 20px; border-radius: 8px; overflow-x: auto; position: relative; }
+        .important { color: #be123c; font-weight: bold; }
+        .flow-box { border: 2px dashed #cbd5e1; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px; background: #fafafa; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Guía para usar el token del servicio Auth</h1>
+    <p>Esta guía explica cómo validar la identidad del usuario en el servicio de <strong>Catalog</strong> utilizando la sesión iniciada en el servicio de <strong>Auth</strong>.</p>
+
+    <div class="flow-box">
+        <strong>Flujo de Verificación:</strong><br>
+        Cliente (Browser) → Envía Cookie <code>token</code> automáticamente → <strong>Catalog Service</strong> (Valida JWT) → Acceso Concedido
+    </div>
+
+    <h2>1. Requisitos Previos</h2>
+    <ul>
+        <li>Ambos servicios deben compartir la misma <code>JWT_SECRET</code> en el archivo <code>.env</code>.</li>
+        <li>El servicio de Catalog debe tener instalados <code>@fastify/jwt</code> y <code>@fastify/cookie</code>.</li>
+    </ul>
+
+    <h2>2. Configuración en Catalog (index.js)</h2>
+    <p>Registrar los plugins exactamente igual para que puedan leer la cookie enviada por el Auth Service:</p>
+    
+    <pre>
+fastify.register(import('@fastify/cookie'));
+fastify.register(import('@fastify/jwt'), {
+  secret: process.env.JWT_SECRET,
+  cookie: {
+    cookieName: 'token',
+    signed: false
+  }
+});</pre>
+
+    <h2>3. ¿Cómo proteger una ruta?</h2>
+    <p>Para verificar si el usuario está logueado antes de mostrar el catálogo o permitir compras, debe usar <code>request.jwtVerify()</code>.</p>
+
+    <div class="step">
+        <strong>Opción A: Verificación Manual en el Handler</strong>
+        <p>Útil si la ruta es "semi-privada" (muestra cosas distintas si estás logueado o no).</p>
+    </div>
+    <pre>
+// catalog-controller.js
+export const getProducts = async (request, reply) => {
+  try {
+    // Esto busca la cookie, la desencripta y mete los datos en request.user
+    await request.jwtVerify();
+    const userId = request.user.id;
+    
+    return { message: `Hola usuario ${userId}, aquí tienes tus ofertas personalizadas` };
+  } catch (err) {
+    // Si no hay token o es inválido, mostramos catálogo genérico
+    return { message: "Aquí tienes el catálogo público" };
+  }
+};</pre>
+
+    <div class="step">
+        <strong>Opción B: Verificación Obligatoria (PreHandler)</strong>
+        <p>Ideal para acciones que requieren sí o sí estar autenticado (ej: añadir al carrito).</p>
+    </div>
+    <pre>
+// catalog-routes.js
+fastify.post('/cart/add', {
+  preHandler: [async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch (err) {
+      reply.code(401).send({ error: 'Debes iniciar sesión para comprar' });
+    }
+  }],
+  handler: catalogController.addToCart
+});</pre>
+
+    <h2>4. Datos disponibles</h2>
+    <p>Una vez que <code>await request.jwtVerify()</code> tiene éxito, tendrá acceso a:</p>
+    <ul>
+        <li><code>request.user.id</code>: El UUID del usuario.</li>
+        <li><code>request.user.email</code>: El correo del usuario.</li>
+    </ul>
+
+    <p class="important">⚠️ IMPORTANTE: No necesitas consultar la base de datos de usuarios desde Catalog para saber quién es el usuario. Los datos básicos ya vienen dentro del token que viaja en la cookie.</p>
+</div>
+
+</body>
+</html>

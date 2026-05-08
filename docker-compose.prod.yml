@@ -1,0 +1,176 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: infra/nginx/Dockerfile
+      args:
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+    container_name: tr_gateway_prod
+    depends_on:
+      bff:
+        condition: service_healthy
+      chat:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - trans_net
+      - red_proxy
+
+  postgres:
+    image: postgis/postgis:15-3.5-alpine
+    platform: linux/amd64
+    container_name: tr_postgres_prod
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      AUTH_DB_USER: ${AUTH_DB_USER}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      AUTH_DB_NAME: ${AUTH_DB_NAME}
+      CHAT_DB_USER: ${CHAT_DB_USER}
+      CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD}
+      CHAT_DB_NAME: ${CHAT_DB_NAME}
+      CATALOG_DB_USER: ${CATALOG_DB_USER}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME}
+    volumes:
+      - ./infra/postgres/init_dbs.sh:/docker-entrypoint-initdb.d/init_dbs.sh
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - trans_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 30s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8.0-alpine
+    container_name: tr_valkey_prod
+    restart: unless-stopped
+    networks:
+      - trans_net
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 30s
+      retries: 10
+
+  bff:
+    build:
+      context: ./services/bff
+      dockerfile: Dockerfile.prod
+    container_name: tr_bff_prod
+    environment:
+      PORT: ${BFF_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      SERVICE_NAME: "BFF Service"
+      AUTH_URL: http://auth:${AUTH_PORT}
+      CATALOG_URL: http://catalog:${CATALOG_PORT}
+      MEDIA_URL: http://media:${MEDIA_PORT}
+    restart: unless-stopped
+    depends_on:
+      auth:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+      media:
+        condition: service_healthy
+    networks:
+      - trans_net
+
+  auth:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile.prod
+    container_name: tr_auth_prod
+    environment:
+      PORT: ${AUTH_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_NAME: "Auth Service"
+      DATABASE_URL: postgres://${AUTH_DB_USER}:${AUTH_DB_PASSWORD}@postgres:5432/${AUTH_DB_NAME}
+      SERVICE_SECRET: ${SERVICE_SECRET}
+      MEDIA_URL: http://media:${MEDIA_PORT}
+      DB_MAX_RETRIES: ${DB_MAX_RETRIES}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_FROM: ${SMTP_FROM}
+      FRONTEND_URL: ${FRONTEND_URL}
+    volumes:
+      - ./secrets/smtp_password.txt:/run/secrets/smtp_password.txt:ro
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - trans_net
+
+  catalog:
+    build:
+      context: ./services/catalog
+      dockerfile: Dockerfile.prod
+    container_name: tr_catalog_prod
+    environment:
+      PORT: ${CATALOG_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      SERVICE_NAME: "Catalog Service"
+      DATABASE_URL: postgres://${CATALOG_DB_USER}:${CATALOG_DB_PASSWORD}@postgres:5432/${CATALOG_DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_SECRET: ${SERVICE_SECRET}
+      DB_MAX_RETRIES: ${DB_MAX_RETRIES}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - trans_net
+
+  media:
+    build:
+      context: ./services/media
+      dockerfile: Dockerfile.prod
+    container_name: tr_media_prod
+    environment:
+      PORT: ${MEDIA_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      SERVICE_NAME: "Media Service"
+      UPLOAD_DIR: /uploads
+      SERVICE_SECRET: ${SERVICE_SECRET}
+      AUTH_URL: http://auth:${AUTH_PORT}
+      CATALOG_URL: http://catalog:${CATALOG_PORT}
+    volumes:
+      - media_hdd:/uploads
+    restart: unless-stopped
+    networks:
+      - trans_net
+
+  chat:
+    build:
+      context: ./services/chat
+      dockerfile: Dockerfile.prod
+    container_name: tr_chat_prod
+    environment:
+      PORT: ${CHAT_PORT}
+      HOST: ${DOCKER_HOST_IP}
+      SERVICE_NAME: "Chat Service"
+      DATABASE_URL: postgres://${CHAT_DB_USER}:${CHAT_DB_PASSWORD}@postgres:5432/${CHAT_DB_NAME}
+      DB_MAX_RETRIES: ${DB_MAX_RETRIES}
+      JWT_SECRET: ${JWT_SECRET}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks:
+      - trans_net
+
+volumes:
+  db_data:
+  media_hdd:
+
+networks:
+  trans_net:
+    driver: bridge
+  red_proxy:
+    external: true

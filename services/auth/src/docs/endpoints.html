@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentación API Auth - v1.0</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        .auth-note {
+            background: #dbeafe;
+            border-left: 4px solid var(--primary);
+            padding: 1rem;
+            margin-bottom: 2rem;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .endpoint {
+            background: var(--card);
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+            border: 1px solid #e2e8f0;
+        }
+
+        .endpoint-header {
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            cursor: pointer;
+            background: #f1f5f9;
+        }
+
+        .method {
+            font-weight: bold;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .GET { background: #dcfce7; color: #166534; }
+        .POST { background: #dbeafe; color: #1e40af; }
+        .PUT { background: #fef9c3; color: #854d0e; }
+        .DELETE { background: #fee2e2; color: #991b1b; }
+
+        .path { font-family: 'Courier New', Courier, monospace; font-weight: 600; }
+
+        .endpoint-body {
+            padding: 1.5rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th { font-size: 0.875rem; color: var(--secondary); text-transform: uppercase; }
+
+        pre {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.9rem;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Guía de Integración: Servicio de Autenticación</h1>
+    </header>
+
+    <div class="auth-note">
+        <h3>Nota Importante para Front-end: Autenticación</h3>
+        <ul>
+            <li><strong>Mecanismo:</strong> Cookies HTTP-Only. No es necesario manejar tokens manualmente en el código.</li>
+            <li><strong>Configuración:</strong> El cliente (Axios/Fetch) <strong>DEBE</strong> incluir la opción <code>withCredentials: true</code> o <code>credentials: 'include'</code> en cada petición para que el navegador envíe la cookie.</li>
+            <li><strong>XSS:</strong> La cookie no es accesible vía JavaScript por seguridad.</li>
+        </ul>
+    </div>
+
+    <div class="endpoint">
+        <div class="endpoint-header">
+            <span class="method POST">POST</span>
+            <span class="path">/signup</span>
+            <span class="secondary">Registro de nuevo usuario</span>
+        </div>
+        <div class="endpoint-body">
+            <h4>Request Body (JSON)</h4>
+            <pre>{
+  "name": "Juan",
+  "lastNames": "Pérez",
+  "email": "juan@example.com",
+  "password": "mypassword123",
+  "lat": 40.4167,
+  "lng": -3.7033
+}</pre>
+            <h4>Respuestas</h4>
+            <table>
+                <tr><th>Código</th><th>Descripción</th></tr>
+                <tr><td>201 Created</td><td>Usuario creado. Recibe cookie 'token' y objeto user.</td></tr>
+                <tr><td>409 Conflict</td><td>El email ya está registrado.</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <div class="endpoint-header">
+            <span class="method POST">POST</span>
+            <span class="path">/signin</span>
+            <span class="secondary">Inicio de sesión</span>
+        </div>
+        <div class="endpoint-body">
+            <h4>Request Body</h4>
+            <pre>{
+  "email": "juan@example.com",
+  "password": "mypassword123"
+}</pre>
+            <h4>Respuestas</h4>
+            <table>
+                <tr><th>Código</th><th>Descripción</th></tr>
+                <tr><td>200 OK</td><td>Login exitoso. Recibe cookie 'token'.</td></tr>
+                <tr><td>401 Unauthorized</td><td>Credenciales incorrectas.</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <div class="endpoint-header">
+            <span class="method GET">GET</span>
+            <span class="path">/user/:id</span>
+            <span class="secondary">Ver perfil de usuario</span>
+        </div>
+        <div class="endpoint-body">
+            <p><small>* Si el ID del token coincide con el :id, se muestran datos privados (email, coords). Si no, vista pública.</small></p>
+            <h4>URL Params</h4>
+            <table>
+                <tr><td>id</td><td><span class="badge">UUID</span> Requerido</td></tr>
+            </table>
+            <h4>Respuestas</h4>
+            <table>
+                <tr><td>200 OK</td><td>Retorna objeto usuario filtrado.</td></tr>
+                <tr><td>404 Not Found</td><td>El usuario no existe.</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <div class="endpoint-header">
+            <span class="method PUT">PUT</span>
+            <span class="path">/user/:id</span>
+            <span class="secondary">Actualizar datos de perfil</span>
+        </div>
+        <div class="endpoint-body">
+            <p><strong>Seguridad:</strong> Solo permitido si el usuario autenticado es el dueño del :id.</p>
+            <h4>Request Body (Opcionales)</h4>
+            <pre>{
+  "name": "Nuevo Nombre",
+  "lastNames": "Nuevos Apellidos",
+  "lat": 41.3851,
+  "lng": 2.1734
+}</pre>
+            <table>
+                <tr><td>403 Forbidden</td><td>Intentas editar un perfil que no es tuyo.</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <div class="endpoint-header">
+            <span class="method POST">POST</span>
+            <span class="path">/logout</span>
+            <span class="secondary">Cerrar sesión</span>
+        </div>
+        <div class="endpoint-body">
+            <p>Limpia la cookie del navegador inmediatamente.</p>
+        </div>
+    </div>
+
+     <div class="endpoint">
+        <div class="endpoint-header">
+            <span class="method DELETE">DELETE</span>
+            <span class="path">/user/:id</span>
+            <span class="secondary">Eliminar cuenta</span>
+        </div>
+        <div class="endpoint-body">
+            <p><strong>Seguridad:</strong> Requiere estar autenticado como el dueño de la cuenta.</p>
+            <table>
+                <tr><td>200 OK</td><td>Cuenta borrada y cookie eliminada.</td></tr>
+                <tr><td>403 Forbidden</td><td>No tienes permiso para borrar este usuario.</td></tr>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

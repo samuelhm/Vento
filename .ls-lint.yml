@@ -1,0 +1,51 @@
+# .ls-lint.yml
+
+ls:
+  .js: kebab-case
+  .ts: kebab-case
+  .css: kebab-case
+  .html: kebab-case
+  .json: kebab-case
+  .d.ts: kebab-case
+
+  # Regla: Carpetas en minúsculas/kebab-case
+  .dir: kebab-case
+
+  # Regla: Imágenes
+  .png: snake_case | kebab-case
+  .jpg: snake_case | kebab-case
+  .webp: snake_case | kebab-case
+
+  # Regla específica: Todo código del frontend en src
+  services/frontend/src:
+    .js: PascalCase | camelCase
+    .jsx: PascalCase | camelCase
+    .ts: PascalCase | camelCase
+    .tsx: PascalCase | camelCase
+    .d.ts: PascalCase | camelCase
+    .loader.ts: PascalCase | camelCase
+    .action.ts: PascalCase | camelCase
+    .vue: PascalCase | camelCase
+
+ignore:
+  - .git
+  - node_modules
+  - .github
+  - dist
+  - build
+  - .eslintrc.js
+  - eslint.config.mjs
+  - commitlint.config.js      # Standard commitlint configuration file
+
+
+  - .vscode                   # Configuración del IDE
+  - .idea                     # Configuración de JetBrains (por si acaso)
+  - infra/nginx/conf.d        # Estándar de Nginx (conf.d usa punto)
+
+
+  - services/frontend/tsconfig.app.json
+  - services/frontend/tsconfig.node.json
+  - services/frontend/vite.config.ts
+  - services/chat/prisma/migrations/20260209134232_init
+  - "**/index.tsx"
+  - "**/index.ts"

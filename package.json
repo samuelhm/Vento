@@ -1,0 +1,30 @@
+{
+  "name": "chat-service",
+  "version": "1.0.0",
+  "description": "Vento Chat Service",
+  "type": "module",
+  "scripts": {
+    "lint:root": "eslint .",
+    "lint:frontend": "npm --prefix services/frontend run lint",
+    "typecheck:frontend": "npm --prefix services/frontend run typecheck",
+    "lint": "npm run lint:root && npm run lint:frontend",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@tailwindcss/vite": "^4.1.18",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.6.2",
+    "sonner": "^2.0.7",
+    "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.2",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7"
+  }
+}

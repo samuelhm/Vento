@@ -1,0 +1,70 @@
+name: Vento Quality Gate
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  # Trabajo 1: Validar Nombres de Archivos
+  check-filenames:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Validar Nombres (ls-lint)
+        uses: ls-lint/action@v2.2.3
+        with:
+          config: .ls-lint.yml
+
+  # Trabajo 2: Validar Tamaño de Archivos (Tu script Bash)
+  check-filesize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Ejecutar validador de tamaño
+        run: ./.github/scripts/check-file-size.sh
+  # Trabajo 3: Validar Estilo de Código (ESLint)
+  check-code-style:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar dependencias frontend
+        working-directory: services/frontend
+        run: npm ci
+
+      - name: Ejecutar ESLint
+        run: npm run lint
+
+      - name: Ejecutar TypeScript frontend
+        working-directory: services/frontend
+        run: npm run typecheck
+  # Trabajo 4: Validar Mensajes de Commit (Commitlint)
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Importante: Trae todo el historial git
+      
+      - name: Instalar commitlint
+        run: |
+          npm install --save-dev @commitlint/{config-conventional,cli}
+
+      - name: Validar Commits (Último commit)
+        run: npx commitlint --from HEAD~1 --to HEAD --verbose
