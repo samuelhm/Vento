@@ -73,3 +73,4 @@ testListings.http
 # specific dump files, but usually WIP is handled via git branches.
 secrets/
 .env
+deploy.sh
